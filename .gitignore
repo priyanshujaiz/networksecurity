@@ -2,3 +2,9 @@ venv
 .env
 Artifacts
 logs
+
+# Python packaging
+*.egg-info/
+dist/
+build/
+*.egg
