@@ -3,8 +3,4 @@ venv
 Artifacts
 logs
 
-# Python packaging
-*.egg-info/
-dist/
-build/
-*.egg
+NetworkSecurity.egg-info/
