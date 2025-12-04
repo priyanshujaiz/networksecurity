@@ -4,3 +4,4 @@ Artifacts
 logs
 
 NetworkSecurity.egg-info/
+__pycache__/
