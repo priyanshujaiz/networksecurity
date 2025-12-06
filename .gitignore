@@ -5,3 +5,4 @@ logs
 
 NetworkSecurity.egg-info/
 __pycache__/
+mlruns/
