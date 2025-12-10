@@ -25,6 +25,8 @@ from sklearn.ensemble import (
 )
 
 import mlflow
+import dagshub
+dagshub.init(repo_owner='priyanshujaiz', repo_name='networksecurity', mlflow=True)
 
 
 class ModelTrainer:
@@ -45,7 +47,11 @@ class ModelTrainer:
                 mlflow.log_metric("f1_score",f1_score)
                 mlflow.log_metric("precision_score",precision_score)
                 mlflow.log_metric("recall_score",recall_score)
-                mlflow.sklearn.log_model(best_model,artifact_path="model")
+                try:
+                    mlflow.sklearn.log_model(best_model, artifact_path="model")
+                except Exception as model_log_error:
+                    logging.warning(f"Could not log model to MLflow (likely DagsHub limitation): {str(model_log_error)}")
+                    logging.info("Model is still saved locally in artifacts directory")
                 
         except Exception as e:
             raise NetworkSecurityException(e,sys)
@@ -117,6 +123,7 @@ class ModelTrainer:
             Network_Model=NetworkModel(preprocessor=preprocessor,model=best_model)
             save_object(file_path=self.model_trainer_config.trained_model_file_path,obj=Network_Model)
 
+            save_object("final_model/model.pkl",best_model)
             ##Model Trainer Artifact 
             Model_Trainer_Artifact=ModelTrainerArtifact(trained_model_file_path=self.model_trainer_config.trained_model_file_path,
                 train_metric_artifact=classification_train_metric,
