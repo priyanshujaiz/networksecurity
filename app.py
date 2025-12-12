@@ -21,8 +21,8 @@ from fastapi.responses import Response
 from starlette.responses import RedirectResponse
 import pandas as pd
 from networksecurity.utils.ml_utils.model.estimator import NetworkModel
-
 from networksecurity.utils.main_utils.utils import load_object
+import mlflow
 
 client=pymongo.MongoClient(mongo_db_url,tlsCAFile=ca)
 
@@ -42,12 +42,85 @@ app.add_middleware(
     allow_headers=["*"],
 )
 from fastapi.templating import Jinja2Templates
+from fastapi.staticfiles import StaticFiles
+
 templates=Jinja2Templates(directory="./template")
+
+# Mount static files for CSS, JS, and images
+app.mount("/static", StaticFiles(directory="static"), name="static")
 
 
 @app.get("/",tags=["authentication"])
 async def index():
-    return RedirectResponse(url="/docs")
+    return RedirectResponse(url="/dashboard")
+
+@app.get("/dashboard", tags=["dashboard"])
+async def dashboard(request: Request):
+    """Main dashboard page with MLflow metrics"""
+    try:
+        import mlflow
+        from mlflow.tracking import MlflowClient
+        
+        # Initialize MLflow client
+        client = MlflowClient()
+        
+        # Get recent runs from MLflow
+        try:
+            runs_df = mlflow.search_runs(order_by=["start_time DESC"], max_results=10)
+        except Exception as mlflow_error:
+            logging.warning(f"MLflow search failed: {mlflow_error}")
+            runs_df = pd.DataFrame()
+        
+        # Get best model metrics
+        best_f1 = 0
+        best_precision = 0
+        best_recall = 0
+        
+        if len(runs_df) > 0 and 'metrics.f1_score' in runs_df.columns:
+            # Find the run with best F1 score
+            best_run_idx = runs_df['metrics.f1_score'].idxmax()
+            best_run = runs_df.loc[best_run_idx]
+            best_f1 = best_run.get('metrics.f1_score', 0) or 0
+            best_precision = best_run.get('metrics.precision_score', 0) or 0
+            best_recall = best_run.get('metrics.recall_score', 0) or 0
+        
+        # Prepare data for template
+        dashboard_data = {
+            "total_runs": len(runs_df),
+            "best_f1_score": float(best_f1),
+            "best_precision": float(best_precision),
+            "best_recall": float(best_recall),
+            "recent_runs": runs_df.to_dict('records') if len(runs_df) > 0 else []
+        }
+        
+        return templates.TemplateResponse("dashboard.html", {
+            "request": request,
+            "data": dashboard_data
+        })
+    except Exception as e:
+        logging.error(f"Dashboard error: {e}")
+        # Return dashboard with empty data if there's an error
+        return templates.TemplateResponse("dashboard.html", {
+            "request": request,
+            "data": {
+                "total_runs": 0,
+                "best_f1_score": 0.0,
+                "best_precision": 0.0,
+                "best_recall": 0.0,
+                "recent_runs": []
+            }
+        })
+
+@app.get("/api/mlflow/runs", tags=["api"])
+async def get_mlflow_runs():
+    """API endpoint to get MLflow runs data as JSON"""
+    try:
+        import mlflow
+        runs_df = mlflow.search_runs(order_by=["start_time DESC"], max_results=20)
+        return {"success": True, "data": runs_df.to_dict('records')}
+    except Exception as e:
+        logging.error(f"MLflow API error: {e}")
+        return {"success": False, "error": str(e), "data": []}
 
 @app.get("/train")
 async def train_route():
